@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>수업 알림</title>
+<style>
+:root{--bg:#13302a;--panel:#1b433a;--line:#2f5f53;--chalk:#f4f1e6;--dim:#a9c2b8;--yellow:#f4cf5d;--alert:#ff7f5c}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--chalk);font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif}
+.screen{display:none;min-height:100%;padding:3vh 4vw;flex-direction:column}
+.screen.on{display:flex}
+button{font:inherit;font-size:clamp(16px,1.7vw,34px);padding:.55em 1.2em;border-radius:.5em;border:2px solid var(--chalk);background:transparent;color:var(--chalk);cursor:pointer}
+button:hover,button:focus-visible{background:var(--chalk);color:var(--bg);outline:none}
+button.main{background:var(--yellow);border-color:var(--yellow);color:#1d2a10;font-weight:700}
+button.main:hover,button.main:focus-visible{background:#ffe18a}
+h1{margin:0 0 .3em;font-size:clamp(28px,3.6vw,72px)}
+.hint{color:var(--dim);font-size:clamp(15px,1.5vw,30px);margin:0 0 2vh}
+.top{display:flex;justify-content:space-between;align-items:center;gap:2vw}
+.top .date{font-size:clamp(18px,2.2vw,44px);color:var(--dim)}
+.top div:last-child{display:flex;gap:1vw}
+.top button{font-size:clamp(14px,1.3vw,26px);padding:.4em .9em;border-width:1px;color:var(--dim);border-color:var(--line)}
+/* setup */
+.rows{display:flex;flex-direction:column;gap:1.2vh;font-size:clamp(18px,2.2vw,44px)}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:.4em 3vw}
+.nm{width:5.5em}
+.rows select{font:inherit;padding:.15em .3em;border-radius:.3em;border:2px solid var(--line);background:var(--panel);color:var(--chalk)}
+.tm{display:inline-flex;align-items:center;gap:.3em}
+.rows input[type=checkbox]{width:1.1em;height:1.1em;accent-color:var(--yellow);vertical-align:middle}
+.days{display:flex;gap:1.4vw}
+.days label{color:var(--dim);font-size:.75em;white-space:nowrap}
+.actions{display:flex;gap:1.5vw;margin-top:3vh;flex-wrap:wrap}
+.err{color:var(--alert);font-size:clamp(15px,1.6vw,30px);min-height:1.5em;margin-top:1.5vh}
+/* start / main */
+.center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:1.5vh}
+.clock{font-size:min(14vw,26vh);font-weight:700;line-height:1;color:var(--yellow);font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.state{font-size:min(5.5vw,10vh);font-weight:700}
+.sub{font-size:min(2.6vw,5vh);color:var(--dim)}
+.count{font-size:min(7vw,13vh);font-variant-numeric:tabular-nums}
+.tb{display:grid;grid-template-columns:repeat(7,1fr);gap:1vw}
+.cell{border:2px solid var(--line);border-radius:.6em;padding:1.2vh .5vw;text-align:center;font-size:clamp(14px,1.9vw,38px);color:var(--dim)}
+.cell b{display:block;color:var(--chalk);font-size:1.05em}
+.cell i{display:block;font-style:normal;font-size:.7em;color:var(--yellow);min-height:1.2em}
+.cell.now{border-color:var(--yellow);background:var(--panel);color:var(--chalk)}
+.cell.lunch{border-style:dashed}
+@media (max-width:700px){.tb{grid-template-columns:repeat(4,1fr)}}
+/* alert banner */
+#banner{position:fixed;inset:0;background:var(--alert);color:#2a0f06;display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;z-index:9;cursor:pointer}
+#banner.on{display:flex;animation:pulse 1s ease-in-out infinite alternate}
+#banner .t{font-size:min(13vw,24vh);font-weight:800;line-height:1.05}
+#banner .s{font-size:min(5vw,9vh);margin-top:2vh}
+#banner .c{font-size:min(2.2vw,4vh);margin-top:4vh;opacity:.7}
+@keyframes pulse{from{background:#ff7f5c}to{background:#ff9b7d}}
+@media (prefers-reduced-motion:reduce){#banner.on{animation:none}}
+</style>
+</head>
+<body>
+
+<!-- 1. 시간표 설정 -->
+<section id="setup" class="screen">
+  <h1>시간표 설정</h1>
+  <p class="hint">교시 시작 시간을 한 번 입력해 두면 저장돼요. 전담 수업은 요일별로 체크하세요. (수업은 40분 기준)</p>
+  <div class="rows" id="rows"></div>
+  <div class="err" id="err"></div>
+  <div class="actions">
+    <button class="main" id="saveBtn">저장</button>
+    <button id="defBtn">기본값으로</button>
+  </div>
+</section>
+
+<!-- 2. 시작 화면 -->
+<section id="start" class="screen">
+  <div class="top"><div class="date" id="d1"></div><div><button id="setBtn1">설정</button></div></div>
+  <div class="center">
+    <div class="clock" id="c1"></div>
+    <div class="sub">아래 버튼을 눌러야 소리 알림이 켜져요</div>
+    <div class="actions" style="justify-content:center">
+      <button class="main" id="startBtn" style="font-size:min(4vw,7vh)">알림 시작</button>
+      <button id="testBtn">소리 확인</button>
+    </div>
+  </div>
+  <div class="tb" id="tb1"></div>
+</section>
+
+<!-- 3. 메인 화면 -->
+<section id="main" class="screen">
+  <div class="top"><div class="date" id="d2"></div><div><button id="fsBtn">전체화면</button><button id="setBtn2">설정</button></div></div>
+  <div class="center">
+    <div class="clock" id="c2"></div>
+    <div class="state" id="state"></div>
+    <div class="count" id="count"></div>
+    <div class="sub" id="sub"></div>
+  </div>
+  <div class="tb" id="tb2"></div>
+</section>
+
+<!-- 4. 알림 -->
+<div id="banner"><div class="t" id="bt"></div><div class="s" id="bs"></div><div class="c">화면을 누르면 닫혀요</div></div>
+
+<script>
+(function(){
+var KEY='classAlarmV1', LEN=40*60, running=false, alertUntil=0, fired={};
+function def(){return [["1교시","09:00",'c'],["2교시","09:50",'c'],["3교시","10:40",'c'],["4교시","11:30",'c'],["점심시간","12:10",'l'],["5교시","13:00",'c'],["6교시","13:50",'c']].map(function(a){return{n:a[0],t:a[1],k:a[2],s:[false,false,false,false,false]}})}
+function load(){try{var s=JSON.parse(localStorage.getItem(KEY));if(s&&s.length===7){s.forEach(function(x){if(!Array.isArray(x.s))x.s=[!!x.s,!!x.s,!!x.s,!!x.s,!!x.s]});return s}}catch(e){}return null}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(items))}catch(e){}}
+function $(id){return document.getElementById(id)}
+function sec(t){var p=t.split(':');return (+p[0])*3600+(+p[1])*60}
+function dayIdx(){var g=new Date().getDay();return g>=1&&g<=5?g-1:-1}
+function sp(x){var d=dayIdx();return d>=0&&x.s[d]===true}
+function pad(n){return (n<10?'0':'')+n}
+function show(id){['setup','start','main'].forEach(function(s){$(s).classList.toggle('on',s===id)})}
+function speak(t){try{var u=new SpeechSynthesisUtterance(t);u.lang='ko-KR';u.rate=.95;var v=speechSynthesis.getVoices().filter(function(x){return (x.lang||'').replace('_','-').toLowerCase().indexOf('ko')===0})[0];if(v)u.voice=v;speechSynthesis.cancel();speechSynthesis.speak(u)}catch(e){}}
+
+var items=load();
+
+/* 설정 화면 */
+function opts(n,sel){var h='';for(var k=0;k<n;k++){var v=pad(k);h+='<option value="'+v+'"'+(v===sel?' selected':'')+'>'+v+'</option>'}return h}
+function renderSetup(){
+  var h='';
+  items.forEach(function(x,i){
+    h+='<div class="row"><span class="nm">'+x.n+'</span><span class="tm"><select id="th'+i+'">'+opts(24,x.t.split(':')[0])+'</select>:<select id="tm'+i+'">'+opts(60,x.t.split(':')[1])+'</select></span>';
+    h+=x.k==='c'?'<span class="days">'+['월','화','수','목','금'].map(function(w,d){return '<label><input type="checkbox" id="s'+i+'_'+d+'"'+(x.s[d]?' checked':'')+'> '+w+'</label>'}).join('')+'</span>':'';h+='</div>';
+  });
+  $('rows').innerHTML=h;$('err').textContent='';
+}
+$('saveBtn').onclick=function(){
+  var prev=-1,next=items.map(function(x,i){return{n:x.n,k:x.k,t:'',s:[0,1,2,3,4].map(function(d){var c=$('s'+i+'_'+d);return !!(c&&c.checked)})}});
+  for(var i=0;i<next.length;i++){
+    var v=$('th'+i).value+':'+$('tm'+i).value;
+    if(!v){$('err').textContent=next[i].n+' 시간을 입력해 주세요.';return}
+    if(sec(v)<=prev){$('err').textContent=next[i].n+' 시간이 앞 시간보다 늦어야 해요.';return}
+    next[i].t=v;prev=sec(v);
+  }
+  items=next;save();fired={};show(running?'main':'start');tick();
+};
+$('defBtn').onclick=function(){items=def();renderSetup()};
+function openSetup(){renderSetup();show('setup')}
+$('setBtn1').onclick=openSetup;$('setBtn2').onclick=openSetup;
+
+/* 시작 화면 */
+$('startBtn').onclick=function(){
+  running=true;speak('알림이 켜졌습니다');
+  try{if(navigator.wakeLock)navigator.wakeLock.request('screen').catch(function(){})}catch(e){}
+  show('main');tick();
+};
+$('testBtn').onclick=function(){speak('수업 2분 전입니다')};
+$('fsBtn').onclick=function(){try{document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen()}catch(e){}};
+$('banner').onclick=function(){alertUntil=0;$('banner').classList.remove('on')};
+
+/* 시간표 카드 */
+function table(cur){
+  return items.map(function(x,i){
+    return '<div class="cell'+(i===cur?' now':'')+(x.k==='l'?' lunch':'')+'"><b>'+x.n+'</b>'+x.t+'<i>'+(sp(x)?'전담':'')+'</i></div>';
+  }).join('');
+}
+function fmt(s){s=Math.max(0,s);var h=Math.floor(s/3600),m=Math.floor(s%3600/60),r=s%60;return (h?h+':'+pad(m):pad(m))+':'+pad(r)}
+
+function ring(x){
+  var t=sp(x)?'전담 준비':'수업 2분 전', s=sp(x)?'줄 서세요':x.n+' 준비';
+  $('bt').textContent=t;$('bs').textContent=s;
+  alertUntil=Date.now()+60000;
+  speak(sp(x)?'전담 준비. 줄 서세요':'수업 2분 전입니다');
+}
+
+function tick(){
+  var d=new Date(), now=d.getHours()*3600+d.getMinutes()*60+d.getSeconds();
+  var clock=pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());
+  var ds=d.toLocaleDateString('ko-KR',{month:'long',day:'numeric',weekday:'long'});
+  $('c1').textContent=clock;$('c2').textContent=clock;$('d1').textContent=ds;$('d2').textContent=ds;
+  if(!items)return;
+  var wk=d.getDay()===0||d.getDay()===6;
+  var S=items.map(function(x){return sec(x.t)}), cur=-1;
+  for(var i=0;i<S.length;i++)if(now>=S[i])cur=i;
+  var state='',count='',sub='',hi=-1;
+  if(wk){state='주말이에요';sub='주말에는 알림이 울리지 않아요'}
+  else if(cur===-1){state='수업 전';count=fmt(S[0]-now);sub=items[0].n+' 시작까지';hi=-1}
+  else{
+    var x=items[cur];hi=cur;
+    if(x.k==='c'&&now<S[cur]+LEN){state=x.n+' 수업 중'+(sp(x)?' (전담)':'');count=fmt(S[cur]+LEN-now);sub='수업 끝까지'}
+    else if(cur===items.length-1){state='오늘 수업 끝';hi=-1}
+    else{
+      var nx=items[cur+1];
+      state=x.k==='l'?'점심시간':'쉬는시간';
+      count=fmt(S[cur+1]-now);sub=nx.n+(nx.k==='l'?'':' 시작')+'까지';
+      if(x.k==='c')hi=-1;
+    }
+  }
+  $('state').textContent=state;$('count').textContent=count;$('sub').textContent=sub;
+  var tbHtml=table(hi);$('tb1').innerHTML=tbHtml;$('tb2').innerHTML=tbHtml;
+  /* 알림 */
+  if(running&&!wk){
+    var key=d.toDateString();
+    items.forEach(function(x,i){
+      if(x.k!=='c')return;
+      var trig=S[i]-(sp(x)?300:120), id=key+i;
+      if(now>=trig&&now<trig+45&&!fired[id]){fired[id]=1;ring(x)}
+    });
+  }
+  $('banner').classList.toggle('on',Date.now()<alertUntil);
+}
+
+if(!items){items=def();openSetup()}else show('start');
+try{speechSynthesis.getVoices()}catch(e){}
+tick();setInterval(tick,1000);
+})();
+</script>
+</body>
+</html>
